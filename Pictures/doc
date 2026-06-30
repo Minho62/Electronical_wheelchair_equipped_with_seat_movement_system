@@ -1,0 +1,214 @@
+$ sudo apt-get update -y
+$ sudo apt-get upgrade -y
+
+
+$ wget https://raw.githubusercontent.com/ROBOTIS-GIT/robotis_tools/master/install_ros_noetic.sh
+$ chmod 755 ./install_ros_noetic.sh 
+$ bash ./install_ros_noetic.sh
+
+$ sudo apt-get install ros-noetic-joy ros-noetic-teleop-twist-joy \
+  ros-noetic-teleop-twist-keyboard ros-noetic-laser-proc \
+  ros-noetic-rgbd-launch ros-noetic-rosserial-arduino \
+  ros-noetic-rosserial-python ros-noetic-rosserial-client \
+  ros-noetic-rosserial-msgs ros-noetic-amcl ros-noetic-map-server \
+  ros-noetic-move-base ros-noetic-urdf ros-noetic-xacro \
+  ros-noetic-compressed-image-transport ros-noetic-rqt* ros-noetic-rviz \
+  ros-noetic-gmapping ros-noetic-navigation ros-noetic-interactive-markers
+
+
+$ sudo apt install ros-noetic-dynamixel-sdk
+$ sudo apt install ros-noetic-turtlebot3-msgs
+$ sudo apt install ros-noetic-turtlebot3
+
+#LiDAR
+https://github.com/YDLIDAR/YDLidar-SDK#
+$ git clone https://github.com/YDLIDAR/YDLidar-SDK.git
+$ cd YDLidar-SDK
+$ mkdir build
+$ cd build
+$ cmake ..
+$ make
+$ sudo make install
+
+
+https://github.com/YDLIDAR/ydlidar_ros_driver
+$ cd catkin_ws/src
+$ git clone https://github.com/YDLIDAR/ydlidar_ros_driver.git ydlidar_ws/src/ydlidar_ros_driver
+$ cd ydlidar_ws
+$ catkin_make
+$ echo $ROS_PACKAGE_PATH
+$ chmod 0777 src/ydlidar_ros_driver/startup/*
+$ sudo sh src/ydlidar_ros_driver/startup/initenv.sh
+
+$ roscore
+$ roslaunch ydlidar_ros_driver G2.launch 
+$ rviz
+
+
+$ roscore
+$ roslaunch turtlebot3_bringup turtlebot3_robot.launch
+$ roslaunch turtlebot3_slam turtlebot3_slam.launch
+
+
+6_
+$ sudo dpkg --add-architecture armhf  
+$ sudo apt-get update  
+$ sudo apt-get install libc6:armhf  
+$ export OPENCR_PORT=/dev/ttyACM0  
+$ export OPENCR_MODEL=burger_noetic  
+$ rm -rf ./opencr_update.tar.bz2  
+$ wget https://github.com/ROBOTIS-GIT/OpenCR-Binaries/raw/master/turtlebot3/ROS1/latest/opencr_update.tar.bz2   
+$ tar -xvf opencr_update.tar.bz2 
+$ cd ./opencr_update  
+$ ./update.sh $OPENCR_PORT $OPENCR_MODEL.opencr  
+
+$ roslaunch turtlebot3_teleop turtlebot3_teleop_key.launch
+$ rosrun map_server map_saver -f ~/map
+
+$ roslaunch turtlebot3_navigation turtlebot3_navigation.launch map_file:=$HOME/map.yaml
+
+---------------
+rospy
+cd catkin_ws/src
+$ catkin_create_pkg rospy geometry_msgs
+
+jetson@nano:~/catkin_ws/src$ catkin_create_pkg wheelchair_pkg geometry_msgs
+Created file wheelchair_pkg/package.xml
+Created file wheelchair_pkg/CMakeLists.txt
+Successfully created files in /home/jetson/catkin_ws/src/wheelchair_pkg. Please adjust the values in package.xml.
+jetson@nano:~/catkin_ws/src$ cd wheelchair_pkg/
+jetson@nano:~/catkin_ws/src/wheelchair_pkg$ mkdir scripts
+jetson@nano:~/catkin_ws/src/wheelchair_pkg$ cd scripts/
+jetson@nano:~/catkin_ws/src/wheelchair_pkg/scripts$ geidt wheelchair.py
+
+____________________
+jetson@nano:~/catkin_ws/src/wheelchair_pkg/scripts$ python3 wheelchair.py
+____________________
+motor_acc peedback
+$ rostopic echo /cmd_vel_joy
+
+
+
+rosrun wheelchair_pkg wheelchair.py
+rosrun rosserial_python serial_node.py _port:=/dev/ttyACM1 _baud:=57600
+
+________________________________________________________________________________
+
+$ cd ~/catkin_ws/src/turtlebot3/turtlebot3_description/meshes/bases
+$ cd/home/jetson/catkin_ws/src/turtlebot3/turtlebot3_description/urdf/turtlebot3_waffle_pi.urdf.xacro
+
+
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="-0.064 0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://turtlebot3_description/meshes/bases/waffle_pi_base.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="light_black"/>
+    </visual>
+
+    <collision>
+      <origin xyz="-0.064 0 0.047" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.266 0.266 0.094"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1.3729096e+00"/>
+      <inertia ixx="8.7002718e-03" ixy="-4.7576583e-05" ixz="1.1160499e-04"
+               iyy="8.6195418e-03" iyz="-3.5422299e-06"
+               izz="1.4612727e-02" />
+    </inertial>
+  </link>
+  ->-0.062 -> -0.21
+  
+  
+  
+  <joint name="wheel_left_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="wheel_left_link"/>
+    <origin xyz="0.0 0.144 0.023" rpy="-1.57 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+
+  <joint name="wheel_right_joint" type="continuous">
+    <parent link="base_link"/>
+    <child link="wheel_right_link"/>
+    <origin xyz="0.0 -0.144 0.023" rpy="-1.57 0 0"/>
+    <axis xyz="0 0 1"/>
+  </joint>
+  
+  ->0.0 -> -0.21
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0.0 0 0.068" rpy="0 0 0"/>
+  </joint>
+
+  <link name="imu_link"/>
+
+  <joint name="scan_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="base_scan"/>
+    <origin xyz="-0.064 0 0.122" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_scan">
+    <visual>
+      <origin xyz="0 0 0.0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://turtlebot3_description/meshes/sensors/lds.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="dark"/>
+    </visual>
+    
+    -><mesh filename="package://turtlebot3_description/meshes/sensors/YDLidar_G2.stl" scale="0.001 0.001 0.001"/>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

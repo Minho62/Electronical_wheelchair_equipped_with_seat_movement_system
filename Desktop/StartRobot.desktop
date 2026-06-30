@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Start Robot System
+Comment=Run all robot ROS nodes
+Exec=/usr/bin/gnome-terminal -- bash -ic "source /opt/ros/noetic/setup.bash && source /home/jetson/catkin_ws/devel/setup.bash && /home/jetson/start_robot.py; exec bash"
+Icon=/home/jetson/icons/WHEELCHAIR_ROBOT_START_ICON.png
+Terminal=true
+Categories=Application

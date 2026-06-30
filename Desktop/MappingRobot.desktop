@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Mapping Robot System
+Comment=Run all robot ROS nodes
+Exec=/usr/bin/gnome-terminal -- bash -ic "source /opt/ros/noetic/setup.bash && source /home/jetson/catkin_ws/devel/setup.bash && /home/jetson/mapping_robot.py; exec bash"
+Icon=/home/jetson/icons/MAPPING_ROBOT_ICON.png
+Terminal=true
+Categories=Application

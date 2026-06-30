@@ -1,0 +1,22 @@
+rostopic pub -1 /manual_enable std_msgs/Bool "data: true"
+rostopic pub -1 /manual_enable std_msgs/Bool "data: false"
+
+rosrun topic_tools relay /cmd_vel /cmd_vel_nav
+
+rostopic pub -1 /nav/save_pose std_msgs/Empty "{}"
+rostopic pub -1 /nav/goto_saved std_msgs/Empty "{}"
+[RUN] roscore
+/bin/sh: 1: roscore: not found
+[RUN] roslaunch turtlebot3_bringup turtlebot3_robot.launch
+/bin/sh: 1: roslaunch: not found
+[RUN] roslaunch turtlebot3_navigation turtlebot3_navigation.launch map_file:=/home/jetson/map.yaml
+/bin/sh: 1: roslaunch: not found
+[RUN] rosrun rosserial_python serial_node.py _port:=/dev/ttyACM1 _baud:=57600
+/bin/sh: 1: rosrun: not found
+
+
+
+
+
+startup setting
+gnome-terminal -- /bin/bash -c 'source /opt/ros/noetic/setup.bash; source /home/jetson/catkin_ws/devel/setup.bash; cd /home/jetson/ && /usr/bin/python /home/jetson/start_robot.py'

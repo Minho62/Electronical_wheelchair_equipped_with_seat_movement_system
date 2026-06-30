@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Save Mapping
+Comment=Run all robot ROS nodes
+Exec=/usr/bin/gnome-terminal -- bash -ic "source /opt/ros/noetic/setup.bash && source /home/jetson/catkin_ws/devel/setup.bash && /home/jetson/save_mapping.py; exec bash"
+Icon=/home/jetson/icons/SAVE_MAPPING_ICON.png
+Terminal=true
+Categories=Application

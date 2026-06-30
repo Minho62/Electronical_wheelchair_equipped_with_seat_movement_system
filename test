@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+import time
+import rospy
+import tf
+from geometry_msgs.msg import Twist, PoseStamped, Quaternion
+from std_msgs.msg import Empty, String, Bool
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
+
+class CmdVelMux:
+    def __init__(self):
+        # === 기존 MUX ===
+        self.teleop = Twist(); self.t_stamp_teleop = 0.0
+        self.joy    = Twist(); self.t_stamp_joy    = 0.0
+
+        self.timeout = rospy.get_param("~timeout", 0.5)   # s
+        self.eps_lin = rospy.get_param("~eps_lin", 1e-3)
+        self.eps_ang = rospy.get_param("~eps_ang", 1e-3)
+
+        self.sub_teleop = rospy.Subscriber("cmd_vel_teleop", Twist, self.cb_teleop, queue_size=5)
+        self.sub_joy    = rospy.Subscriber("cmd_vel_joy",    Twist, self.cb_joy,    queue_size=5)
+
+        self.pub_out    = rospy.Publisher("cmd_vel", Twist, queue_size=5)
+        self.rate_hz    = rospy.get_param("~rate", 50)
+        self.prio       = rospy.get_param("~priority", ["teleop", "joy"])  # 순서대로 우선
+
+        # === 네비게이션 보강 ===
+        self.map_frame   = rospy.get_param("~map_frame", "map")
+        self.base_frame  = rospy.get_param("~base_frame", "base_link")
+        self.goal_topic  = rospy.get_param("~goal_topic", "/move_base_simple/goal")  # RViz 2D Nav Goal과 동일
+
+        # 저장된 포즈(x,y,yaw[rad]) 없으면 None
+        self.saved_pose = None
+
+        # TF 리스너
+        self.tf_listener = tf.TransformListener()
+        # TF 버퍼가 찰 시간을 조금 줌
+        rospy.sleep(0.5)
+
+        # 아두이노(rosserial)에서 오는 명령 구독
+        self.sub_save = rospy.Subscriber("nav/save_pose",  Empty,  self.cb_save_pose,  queue_size=1)
+        self.sub_goto = rospy.Subscriber("nav/goto_saved", Empty,  self.cb_goto_pose,  queue_size=1)
+        self.sub_cmd  = rospy.Subscriber("nav/cmd",        String, self.cb_nav_cmd,    queue_size=1)  # "save"/"goto"
+
+        # 2D Nav Goal 퍼블리셔
+        self.pub_goal = rospy.Publisher(self.goal_topic, PoseStamped, queue_size=1)
+
+    # ---------- 기존 MUX 콜백 ----------
+    def cb_teleop(self, msg):
+        self.teleop = msg
+        self.t_stamp_teleop = time.time()
+
+    def cb_joy(self, msg):
+        self.joy = msg
+        self.t_stamp_joy = time.time()
+
+    def is_valid(self, msg, tstamp):
+        if (time.time() - tstamp) > self.timeout:
+            return False
+        # 완전 정지 명령도 유효로 쓰고 싶으면 아래 3줄 주석 처리
+        if abs(msg.linear.x) < self.eps_lin and abs(msg.angular.z) < self.eps_ang:
+            return False
+        return True
+
+    # ---------- 네비게이션 유틸 ----------
+    def get_current_pose_map(self):
+        """map 기준 base_link의 (x,y,yaw) 반환. 실패 시 None"""
+        try:
+            self.tf_listener.waitForTransform(self.map_frame, self.base_frame,
+                                              rospy.Time(0), rospy.Duration(1.0))
+            (trans, rot) = self.tf_listener.lookupTransform(self.map_frame, self.base_frame, rospy.Time(0))
+            x, y = trans[0], trans[1]
+            roll, pitch, yaw = euler_from_quaternion(rot)
+            return (x, y, yaw)
+        except (tf.Exception, tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+            rospy.logwarn_throttle(2.0, "[mux] TF lookup failed: %s", str(e))
+            return None
+
+    def publish_nav_goal(self, x, y, yaw):
+        """map 프레임으로 PoseStamped goal 발행 (/move_base_simple/goal)"""
+        q = quaternion_from_euler(0.0, 0.0, yaw)
+        goal = PoseStamped()
+        goal.header.stamp = rospy.Time.now()
+        goal.header.frame_id = self.map_frame
+        goal.pose.position.x = x
+        goal.pose.position.y = y
+        goal.pose.position.z = 0.0
+        goal.pose.orientation = Quaternion(*q)
+        self.pub_goal.publish(goal)
+        rospy.loginfo("[mux] Published 2D Nav Goal to (%.3f, %.3f, yaw=%.1f°)", x, y, yaw*180.0/3.1415926535)
+
+    # ---------- 네비게이션 콜백 ----------
+    def cb_save_pose(self, _):
+        pose = self.get_current_pose_map()
+        if pose is None:
+            rospy.logwarn("[mux] Cannot save pose: TF not available (map->%s).", self.base_frame)
+            return
+        self.saved_pose = pose
+        x, y, yaw = pose
+        rospy.loginfo("[mux] Saved pose: x=%.3f, y=%.3f, yaw=%.1f°", x, y, yaw*180.0/3.1415926535)
+
+    def cb_goto_pose(self, _):
+        if self.saved_pose is None:
+            rospy.logwarn("[mux] No saved pose yet. Publish std_msgs/Empty on 'nav/save_pose' first.")
+            return
+        x, y, yaw = self.saved_pose
+        self.publish_nav_goal(x, y, yaw)
+
+    def cb_nav_cmd(self, msg):
+        cmd = msg.data.strip().lower()
+        if cmd == "save":
+            self.cb_save_pose(None)
+        elif cmd == "goto":
+            self.cb_goto_pose(None)
+        else:
+            rospy.logwarn("[mux] Unknown nav/cmd: '%s' (use 'save' or 'goto')", cmd)
+
+    # ---------- 메인 루프 ----------
+    def spin(self):
+        r = rospy.Rate(self.rate_hz)
+        while not rospy.is_shutdown():
+            out = Twist()
+            for src in self.prio:
+                if src == "teleop" and self.is_valid(self.teleop, self.t_stamp_teleop):
+                    out = self.teleop; break
+                if src == "joy"    and self.is_valid(self.joy,    self.t_stamp_joy):
+                    out = self.joy;    break
+            self.pub_out.publish(out)
+            r.sleep()
+
+if __name__ == "__main__":
+    rospy.init_node("cmd_vel_mux")
+    CmdVelMux().spin()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+rostopic pub -1 /nav/relative_move geometry_msgs/Vector3 "{x: 1.0, y: 0.0, z: 0.0}"
+
+def cb_relative_move(self, msg):
+    """현재 pose 기준으로 x,y[m], yaw[rad] 만큼 이동"""
+    pose = self.get_current_pose_map()
+    if pose is None:
+        rospy.logwarn("[mux] Cannot do relative move: TF unavailable.")
+        return
+
+    cur_x, cur_y, cur_yaw = pose
+    dx, dy, dyaw = msg.x, msg.y, msg.z
+
+    # 현재 yaw 기준 회전 좌표계 변환
+    target_x = cur_x + dx * rospy.cos(cur_yaw) - dy * rospy.sin(cur_yaw)
+    target_y = cur_y + dx * rospy.sin(cur_yaw) + dy * rospy.cos(cur_yaw)
+    target_yaw = cur_yaw + dyaw
+
+    self.publish_nav_goal(target_x, target_y, target_yaw)
+    rospy.loginfo("[mux] Relative move: Δx=%.2f Δy=%.2f Δyaw=%.1f° → goal (%.2f, %.2f)",
+                  dx, dy, dyaw*180/3.1416, target_x, target_y)
+
